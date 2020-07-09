@@ -83,9 +83,8 @@ class Line(object):
         latency = self.length/(c*2/3)   # propagation time is length/speed, speed = 2/3c
         return latency
 
-    def noise_generation(self, signal_power):
-        noise = signal_power / (2*self.length)
-        return noise
+    def noise_generation(self, lightpath):
+        return self.ase_generation() + self.nli_noise(lightpath.signal_power, lightpath.rs, lightpath.df)
 
     def ase_generation(self):
         h = Planck
@@ -123,3 +122,6 @@ class Line(object):
         node = self.successive[lightpath.path[0]]
         lightpath = node.propagate(lightpath, occupation)
         return lightpath
+
+    def transparency(self):
+        return 10*np.log10(np.exp(self._alpha*self.span_length))
