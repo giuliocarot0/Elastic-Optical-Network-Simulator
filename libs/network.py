@@ -104,7 +104,7 @@ class Network(object):
         propagated_signal_information = start_node.propagate(signal_information, occupation)
         return propagated_signal_information
 
-    def set_weighted_paths(self, sign_power):   # collect data propagating signal
+    def set_weighted_paths(self):   # collect data propagating signal
         if not self.connected:
             self.connect()
         node_names = self.nodes.keys()
@@ -128,7 +128,8 @@ class Network(object):
                 paths.append(pathstring[:-2])
 
                 # propagate signal through the computed path
-                signal = SignalInformation(sign_power, path)
+                signal = Lightpath(path)
+                signal = self.optimization(signal)
                 signal = self.propagate(signal)
                 latencies.append(signal.latency)
                 noises.append(signal.noise_power)
@@ -165,7 +166,8 @@ class Network(object):
                 p = path.replace('', '->')[2:][:-2]
                 path_status = self.route_space.loc[self.route_space.path == p].T.values[1:]
                 channel = [i for i in range(len(path_status)) if path_status[i] == 'free'][0]
-                in_signal = Lightpath(pwr, path, channel)
+                in_signal = Lightpath(path, channel)
+                in_signal = self.optimization(in_signal)
                 out_sign = self.propagate(in_signal, occupation)
                 connection.latency = out_sign.latency
                 connection.snr = 10*np.log10(pwr/out_sign.noise_power)
@@ -226,4 +228,11 @@ class Network(object):
                 states[i] = 'occupied'
         self.route_space[str(channel)] = states
 
+    def optimization(self, lightpath):
+        line_name = lightpath[0:2]
+        line = self.lines[line_name]
 
+        ase = line.ase_generation()
+        nli = line.nli_noise(1, lightpath.rs, lightpath.df)
+        lightpath.signal_power = (ase/(2 * nli)) ** (1/3)
+        return lightpath
