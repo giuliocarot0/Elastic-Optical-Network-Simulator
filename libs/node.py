@@ -31,5 +31,22 @@ class Node(object):
             line_label = path[:2]
             line = self.successive[line_label]
             lightpath.next()
+            lightpath.signal_power = lightpath.optimized_powers[line_label]
             lightpath = line.propagate(lightpath, occupation)
+        return lightpath
+
+    def optimize(self, lightpath):
+        path = lightpath.path
+        if len(path) > 1:
+            line_name = path[:2]
+            line = self.successive[line_name]
+            ase = line.ase_generation()
+            nli = line.nli_noise(1, lightpath.rs, lightpath.df)
+
+            p_opt = (ase / (2 * nli)) ** (1 / 3)
+            lightpath.optimized_powers.update({line_name: p_opt})
+
+            lightpath.next()
+            node = line.successive[lightpath.path[0]]
+            lightpath = node.optimize(lightpath)
         return lightpath
