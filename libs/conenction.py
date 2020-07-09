@@ -1,8 +1,8 @@
 class Connection(object):
-    def __init__(self, inp, output, pwr):
+    def __init__(self, inp, output):
         self._input = inp
         self._output = output
-        self._signal_power = pwr
+        self._signal_power = 0
         self._latency = 0.0
         self._snr = 0.0
 
