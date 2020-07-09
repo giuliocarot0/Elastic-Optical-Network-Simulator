@@ -12,9 +12,9 @@ nodes = list(network.nodes.keys())
 connections = []
 connections_occupied = []
 
-for i in range(100):
+for i in range(200):
     shuffle(nodes)
-    connection = Connection(nodes[0], nodes[-1], 1)
+    connection = Connection(nodes[0], nodes[-1])
     connections.append(connection)
 
 streamed2 = network.stream(connections, 'snr', "occupied")
