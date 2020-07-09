@@ -1,10 +1,12 @@
 class Lightpath(object):
-    def __init__(self, power, path, channel):
-        self._signal_power = power
+    def __init__(self, path, channel, rs=32e9, df=50e9):
+        self._signal_power = 0
         self._path = path
         self._channel = channel
         self._noise_power = 0
         self._latency = 0
+        self._rs = rs
+        self._df = df
 
     @property
     def signal_power(self):
@@ -37,6 +39,14 @@ class Lightpath(object):
     @latency.setter
     def latency(self, latency):
         self._latency = latency
+
+    @property
+    def rs(self):
+        return self._rs
+
+    @property
+    def df(self):
+        return self._df
 
     def add_noise(self, noise):
         self.noise_power += noise
