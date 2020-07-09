@@ -1,4 +1,5 @@
-from scipy.constants import c
+from scipy.constants import c, Planck, pi
+import numpy as np
 from .signal import SignalInformation
 
 
@@ -8,6 +9,15 @@ class Line(object):
         self._length = line_dict['length']
         self._successive = {}
         self._state = ["free"]*10
+        # ila number and parameters
+        self._amplifiers = int(np.ceil(self.length / 80e3))
+        self._span_length = self.length/self._amplifiers
+        self._gain = 20
+        self._noise_figure = 50
+        # fiber parameters
+        self._alpha = 4.6e-5
+        self._beta = 21.27e-27
+        self._gamma = 1.27e-3
 
     @property
     def state(self):
@@ -37,6 +47,38 @@ class Line(object):
     def successive(self, successive):
         self._successive = successive
 
+    @property
+    def amplifiers(self):
+        return self._amplifiers
+
+    @property
+    def span_length(self):
+        return self._span_length
+
+    @property
+    def gain(self):
+        return self._gain
+
+    @gain.setter
+    def gain(self, gain):
+        self._gain = gain
+
+    @property
+    def noise_figure(self):
+        return self._noise_figure
+
+    @property
+    def alpha(self):
+        return self._alpha
+
+    @property
+    def beta(self):
+        return self._beta
+
+    @property
+    def gamma(self):
+        return self._gamma
+
     def latency_generaion(self):
         latency = self.length/(c*2/3)   # propagation time is length/speed, speed = 2/3c
         return latency
@@ -44,6 +86,24 @@ class Line(object):
     def noise_generation(self, signal_power):
         noise = signal_power / (2*self.length)
         return noise
+
+    def ase_generation(self):
+        h = Planck
+        f = 193.4e12
+        bn = 12.5e9
+        # db to linear
+        gain = 10**(self.gain/10)
+        nf = 10**(self.noise_figure/10)
+        return self.amplifiers * h * f * bn * nf * (gain - 1)
+
+    def nli_noise(self, pwr, Rs, df):
+        Nch = 10
+        Bn = 12.5e9
+        loss = np.exp(-self.alpha/self.span_length)
+        gain = 10**(self.gain/10)
+        N = self.amplifiers
+        eta = 16/(27*pi)*np.log(pi**2 * self.beta * Rs**2 * Nch**(2*Rs/df) / (2 * self.alpha)) * self.gamma**2 / (4 * self.alpha * self.beta*Rs**3)
+        return N*(pwr**3 * loss * gain * eta * Bn)
 
     def propagate(self, lightpath, occupation="free"):
         latency = self.latency_generaion()
