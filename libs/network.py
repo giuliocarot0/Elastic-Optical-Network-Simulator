@@ -133,7 +133,7 @@ class Network(object):
                 signal = self.propagate(signal)
                 latencies.append(signal.latency)
                 noises.append(signal.noise_power)
-                snrs.append(10*np.log10(signal.signal_power/signal.noise_power))
+                snrs.append(10*np.log10(signal.snr))
 
         df['path'] = paths
         df['latency'] = latencies
@@ -150,7 +150,7 @@ class Network(object):
     def stream(self, connections, best="latency", occupation="free"):
         streamed = []
         if not self.weighted_paths:
-            self.set_weighted_paths(1)
+            self.set_weighted_paths()
         for connection in connections:
             in_node = connection.input_node
             out_node = connection.output_node
@@ -170,7 +170,7 @@ class Network(object):
                 in_signal = self.optimization(in_signal)
                 out_sign = self.propagate(in_signal, occupation)
                 connection.latency = out_sign.latency
-                connection.snr = 10*np.log10(pwr/out_sign.noise_power)
+                connection.snr = 10*np.log10(out_sign.snr)
                 self.update_route(path, channel)
             else:
                 print("Can't stream connection")
@@ -229,10 +229,8 @@ class Network(object):
         self.route_space[str(channel)] = states
 
     def optimization(self, lightpath):
-        line_name = lightpath[0:2]
-        line = self.lines[line_name]
-
-        ase = line.ase_generation()
-        nli = line.nli_noise(1, lightpath.rs, lightpath.df)
-        lightpath.signal_power = (ase/(2 * nli)) ** (1/3)
-        return lightpath
+        path = lightpath.path
+        node0 = self.nodes[path[0]]
+        o_lightpath = node0.optimize(lightpath)
+        o_lightpath.path = path
+        return o_lightpath
