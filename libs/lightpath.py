@@ -1,5 +1,9 @@
+import numpy as np
+from scipy.special import erfcinv
+
+
 class Lightpath(object):
-    def __init__(self, path, channel=0, rs=32e9, df=50e9):
+    def __init__(self, path, channel=0, rs=32e9, df=50e9, transceiver='shannon'):
         self._signal_power = 0
         self._path = path
         self._channel = channel
@@ -10,6 +14,25 @@ class Lightpath(object):
 
         self._snr = None
         self._optimized_powers = {}
+
+        self._transceiver = transceiver
+        self._bitrate = 0   # maximum lightpath bitrate
+
+    @property
+    def transceiver(self):
+        return self._transceiver
+
+    @transceiver.setter
+    def transceiver(self,transceiver):
+        self._transceiver = transceiver
+
+    @property
+    def bitrate(self):
+        return self._bitrate
+
+    @property
+    def bitrate(self, bitrate):
+        self._bitrate = bitrate
 
     @property
     def optimized_powers(self):
@@ -85,3 +108,5 @@ class Lightpath(object):
 
     def next(self):
         self.path = self.path[1:]
+
+
