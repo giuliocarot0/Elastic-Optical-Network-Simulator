@@ -12,12 +12,13 @@ class Line(object):
         # ila number and parameters
         self._amplifiers = int(np.ceil(self.length / 80e3))
         self._span_length = self.length/self._amplifiers
-        self._gain = 20
         self._noise_figure = 50
         # fiber parameters
         self._alpha = 4.6e-5
         self._beta = 21.27e-27
         self._gamma = 1.27e-3
+
+        self._gain = self.transparency()
 
     @property
     def state(self):
@@ -108,9 +109,11 @@ class Line(object):
         latency = self.latency_generaion()
         lightpath.add_latency(latency)
 
-        signal_power = lightpath.signal_power
-        noise = self.noise_generation(signal_power)
+        noise = self.noise_generation(lightpath)
         lightpath.add_noise(noise)
+
+        snr = lightpath.signal_power / noise
+        lightpath.update_snr(snr)
 
         if occupation == "occupied":
             channel = lightpath.channel
