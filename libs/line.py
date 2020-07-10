@@ -4,11 +4,13 @@ from .signal import SignalInformation
 
 
 class Line(object):
-    def __init__(self, line_dict): # creating a line with a default number of channel equal to 10
+    def __init__(self, line_dict):
         self._label = line_dict['label']
         self._length = line_dict['length']
+        self._nch = line_dict['nch']
         self._successive = {}
-        self._state = ["free"]*10
+        self._state = ["free"]*self._nch
+
         # ila number and parameters
         self._amplifiers = int(np.ceil(self.length / 80e3))
         self._span_length = self.length/self._amplifiers
@@ -97,7 +99,7 @@ class Line(object):
         return self.amplifiers * h * f * bn * nf * (gain - 1)
 
     def nli_noise(self, pwr, Rs, df):
-        Nch = 10
+        Nch = self._nch
         Bn = 12.5e9
         loss = np.exp(-self.alpha/self.span_length)
         gain = 10**(self.gain/10)
