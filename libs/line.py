@@ -1,6 +1,5 @@
 from scipy.constants import c, Planck, pi
 import numpy as np
-from .signal import SignalInformation
 
 
 class Line(object):
@@ -69,6 +68,10 @@ class Line(object):
     @property
     def noise_figure(self):
         return self._noise_figure
+
+    @noise_figure.setter
+    def noise_figure(self, noise_figure):
+        self._noise_figure = noise_figure
 
     @property
     def alpha(self):
