@@ -12,6 +12,8 @@ class Lightpath(object):
         self._rs = rs
         self._df = df
 
+        self._fpath = path
+
         self._snr = None
         self._optimized_powers = {}
 
@@ -30,7 +32,7 @@ class Lightpath(object):
     def bitrate(self):
         return self._bitrate
 
-    @property
+    @bitrate.setter
     def bitrate(self, bitrate):
         self._bitrate = bitrate
 
@@ -67,6 +69,10 @@ class Lightpath(object):
     @property
     def path(self):
         return self._path
+
+    @property
+    def fpath(self):
+        return self._fpath
 
     @path.setter
     def path(self, path):

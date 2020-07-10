@@ -150,9 +150,9 @@ class Network(object):
             rs[str(i)] = ['free']*len(paths)
         self._route_space = rs
 
-    def stream(self, connections, best="latency", occupation="free"):
+    def stream(self, connections, best="latency", transceiver='shannon', occupation="occupied"):
         streamed = []
-        if not self.weighted_paths:
+        if self.weighted_paths is None:
             self.set_weighted_paths()
         for connection in connections:
             in_node = connection.input_node
@@ -171,21 +171,20 @@ class Network(object):
                 in_signal = Lightpath(path, channel)
                 in_signal = self.optimization(in_signal)
                 out_sign = self.propagate(in_signal, occupation)
-                connection.latency = out_sign.latency
-                connection.snr = 10*np.log10(out_sign.snr)
-                connection.bitrate = self.calculate_bitrate(out_sign)
-                if not connection.bitrate:
-                    connection.latency = 0
-                    connection.snr = 0
-                    connection.bitrate = 0
-                if connection.bitrate:
-                    self.update_route(path, channel)    # TODO:controllare che non vada messo fuori dall'if
-            else:
-                print("Can't stream connection")
-                connection.latency = None
-                connection.snr = 0
-                connection.bitrate = 0
 
+                out_sign.bitrate = self.calculate_bitrate(out_sign, transceiver)
+                if out_sign.bitrate == 0.0:
+                    [self.update_route(l.path, l.channel, "free") for l in connection.lightpaths]
+                    connection.block_connection()
+                else:
+                    connection.set_connection(out_sign)
+                    self.update_route(path, channel, "occupied")
+                    if connection.residual_rate_request > 0:
+                        self.stream([connection], best, transceiver)
+
+            else:
+                [self.update_route(l.path, l.channel, "free") for l in connection.lightpaths]
+                connection.block_connection()
             streamed.append(connection)
         return streamed
 
@@ -196,7 +195,6 @@ class Network(object):
         busy_lines = [line for line in self.lines if self.lines[line].state == "occupied"]
         paths = []
         for path in all_paths:
-
             path_free_channels = self.route_space.loc[self.route_space.path == path].T.values[1:]
             if "free" in path_free_channels:
                 paths.append(path)
@@ -228,14 +226,14 @@ class Network(object):
         p_set = set([path[i]+path[i+1] for i in range(len(path) - 1)])
         return p_set
 
-    def update_route(self, path, channel):
+    def update_route(self, path, channel, state):
         p_set = [self.to_set(p) for p in self.route_space.path.values]
         states = self.route_space[str(channel)]
         path_lines = self.to_set(path)
         for i in range(len(p_set)):
             line_set = p_set[i]
             if path_lines.intersection(line_set):
-                states[i] = 'occupied'
+                states[i] = state
         self.route_space[str(channel)] = states
 
     def optimization(self, lightpath):
@@ -247,6 +245,7 @@ class Network(object):
 
     @staticmethod
     def calculate_bitrate(lightpath, bert=1e-3):
+        rb = 0
         snr = lightpath.snr
         bn = 12.5e9
         rs = lightpath.rs
