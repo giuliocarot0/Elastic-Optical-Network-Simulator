@@ -1,4 +1,7 @@
 import json
+
+from scipy.special import erfcinv
+
 from .node import Node
 from .line import Line
 from .lightpath import Lightpath
@@ -133,7 +136,7 @@ class Network(object):
                 signal = self.propagate(signal)
                 latencies.append(signal.latency)
                 noises.append(signal.noise_power)
-                snrs.append(10*np.log10(signal.signal_power/signal.noise_power))
+                snrs.append(10*np.log10(signal.snr))
 
         df['path'] = paths
         df['latency'] = latencies
@@ -150,11 +153,10 @@ class Network(object):
     def stream(self, connections, best="latency", occupation="free"):
         streamed = []
         if not self.weighted_paths:
-            self.set_weighted_paths(1)
+            self.set_weighted_paths()
         for connection in connections:
             in_node = connection.input_node
             out_node = connection.output_node
-            pwr = connection.signal_power
             if best == 'snr':
                 path = self.find_best_snr(in_node, out_node)
             elif best == 'latency':
@@ -170,12 +172,20 @@ class Network(object):
                 in_signal = self.optimization(in_signal)
                 out_sign = self.propagate(in_signal, occupation)
                 connection.latency = out_sign.latency
-                connection.snr = 10*np.log10(pwr/out_sign.noise_power)
-                self.update_route(path, channel)
+                connection.snr = 10*np.log10(out_sign.snr)
+                connection.bitrate = self.calculate_bitrate(out_sign)
+                if not connection.bitrate:
+                    connection.latency = 0
+                    connection.snr = 0
+                    connection.bitrate = 0
+                if connection.bitrate:
+                    self.update_route(path, channel)    # TODO:controllare che non vada messo fuori dall'if
             else:
                 print("Can't stream connection")
                 connection.latency = None
                 connection.snr = 0
+                connection.bitrate = 0
+
             streamed.append(connection)
         return streamed
 
@@ -229,10 +239,29 @@ class Network(object):
         self.route_space[str(channel)] = states
 
     def optimization(self, lightpath):
-        line_name = lightpath[0:2]
-        line = self.lines[line_name]
+        path = lightpath.path
+        node0 = self.nodes[path[0]]
+        o_lightpath = node0.optimize(lightpath)
+        o_lightpath.path = path
+        return o_lightpath
 
-        ase = line.ase_generation()
-        nli = line.nli_noise(1, lightpath.rs, lightpath.df)
-        lightpath.signal_power = (ase/(2 * nli)) ** (1/3)
-        return lightpath
+    @staticmethod
+    def calculate_bitrate(lightpath, bert=1e-3):
+        snr = lightpath.snr
+        bn = 12.5e9
+        rs = lightpath.rs
+        if lightpath.transceiver.lower() == 'fixed-rate':
+            snrt = 2 * erfcinv(2 * bert) * (rs / bn)
+            rb = np.piecewise(snr, [snr < snrt, snr >= snrt], [0, 100])
+        elif lightpath.transceiver.lower() == 'flex-rate':
+            snrt1 = 2 * erfcinv(2 * bert) ** 2 * (rs / bn)
+            snrt2 = (14 / 3) * erfcinv(3 / 2 * bert) ** 2 * (rs / bn)
+            snrt3 = 10 * erfcinv(8 / 3 * bert) ** 2 * (rs / bn)
+            cond1 = (snr < snrt1)
+            cond2 = (snrt1 <= snr < snrt2)
+            cond3 = (snrt2 <= snr < snrt3)
+            cond4 = (snr >= snrt3)
+            rb = np.piecewise(snr, [cond1, cond2, cond3, cond4], [0, 100, 200, 400])
+        elif lightpath.transceiver.lower() == 'shannon':
+            rb = 2 * rs * np.log2(1 + snr * (rs / bn)) * 1e-9
+        return float(rb)
