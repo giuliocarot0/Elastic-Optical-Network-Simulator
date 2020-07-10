@@ -1,23 +1,21 @@
 import json
-
 from scipy.special import erfcinv
-
 from .node import Node
 from .line import Line
 from .lightpath import Lightpath
-from .signal import  SignalInformation
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 
 
 class Network(object):
-    def __init__(self, input_file):
+    def __init__(self, input_file, nch=10, upgrade_line=""):
         self._nodes = {}
         self._lines = {}
         self._connected = False
         self._weighted_paths = None
         self._route_space = None
+        self._nch = nch
         node_json = json.load(open(input_file, 'r'))
         for node_name in node_json:
             node_dict = node_json[node_name]
@@ -31,12 +29,19 @@ class Network(object):
                 node0_position = np.array(node_json[node_name]['position'])
                 node1_position = np.array(node_json[next_node]['position'])
                 line_dict['length'] = np.sqrt(np.sum(node0_position - node1_position) ** 2)  # distance among points
+                line_dict['nch'] = self.nch
                 line = Line(line_dict)
                 self._lines[line_label] = line
+        if not upgrade_line=="":
+            self.lines[upgrade_line].noise_figure = self.lines[upgrade_line].noise_figure -3
 
     @property
     def nodes(self):
         return self._nodes
+
+    @property
+    def nch(self):
+        return self._nch
 
     @property
     def lines(self):
@@ -146,7 +151,7 @@ class Network(object):
 
         rs = pd.DataFrame()
         rs['path'] = paths
-        for i in range(10):
+        for i in range(self.nch):
             rs[str(i)] = ['free']*len(paths)
         self._route_space = rs
 
