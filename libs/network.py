@@ -9,7 +9,7 @@ import pandas as pd
 
 
 class Network(object):
-    def __init__(self, input_file, nch=10):
+    def __init__(self, input_file, nch=10, upgrade_line=""):
         self._nodes = {}
         self._lines = {}
         self._connected = False
@@ -32,6 +32,8 @@ class Network(object):
                 line_dict['nch'] = self.nch
                 line = Line(line_dict)
                 self._lines[line_label] = line
+        if not upgrade_line=="":
+            self.lines[upgrade_line].noise_figure = self.lines[upgrade_line].noise_figure -3
 
     @property
     def nodes(self):
