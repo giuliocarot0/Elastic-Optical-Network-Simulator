@@ -1,13 +1,7 @@
 import numpy as np
-import pandas as pd
-import copy
-import itertools as it
-from libs.conenction import Connection
-from libs.network import Network
-from random import shuffle
 import matplotlib.pyplot as plt
 
-from montecarlo import MonteCarlo
+from libs.montecarlo import MonteCarlo
 
 
 def plot3dbars(t, i):
