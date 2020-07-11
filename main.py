@@ -7,12 +7,7 @@ from libs.network import Network
 from random import shuffle
 import matplotlib.pyplot as plt
 
-
-def create_traffic_matrix(nodes, rate, multiplier=1):
-    s = pd.Series(data=[0.0] * len(nodes), index=nodes)
-    df = pd.DataFrame(float(rate*multiplier), index=s.index, columns=s.index, dtype=s.dtype)
-    np.fill_diagonal(df.values, s)
-    return df
+from montecarlo import MonteCarlo
 
 
 def plot3dbars(t, i):
@@ -26,89 +21,83 @@ def plot3dbars(t, i):
     plt.show()
 
 
-def main():
-    nmc = 50
-    # monte-carlo output arrays
-    mc_node_pairs = []
-    mc_streamed = []
-    mc_line_state = []
+def main1():
+    for j in range(10):
+        start_value = 10    # Value equal to #channel (each channel have ca 500gbps rate)
+        nmc = 10
+        load_margin = 5e-4
+        montecarlo = MonteCarlo('nodes.json')
+        print("Starting Montecarlo Analysis w/ multiplier = {:d}".format(j+start_value))
+        print('\n')
+        for i in range(nmc):
+            print("     Monte-Carlo {:.1f}% (Realization #{:d})".format((i+1)*100/nmc, i))
+            montecarlo.transceiver = "shannon"
+            montecarlo.realize(rate=400, multiplier=start_value + j, nch=10, upgrade_line="")
 
+        montecarlo.compute_results()
+
+        avg_snr = montecarlo.avg_snr
+        avg_rbl = montecarlo.avg_rbl
+        traffic = montecarlo.traffic
+        avg_congestion = montecarlo.avg_congestion()
+
+        plt.bar(range(len(avg_congestion)), list(avg_congestion.values()), align='center')
+        plt.xticks(range(len(avg_congestion)), list(avg_congestion.keys()))
+        plt.title("Multiplier = {:d}".format(j+start_value))
+        plt.show()
+
+        if np.mean(list(avg_congestion.values())) >= 1.0 - load_margin:
+            print("     ---------------NETWORK FULLY LOADED!-------------------")
+            print("     max rate_multiplier value = {:d}".format(j+start_value))
+            print('     Avg Total Traffic: {:.2f} Tbps'.format(np.mean(traffic)))
+            print('     Avg Lightpath Bitrate: {:.2f} Gbps'.format(np.mean(avg_rbl)))
+            print('     Avg Lightpath SNR: {:.2f} dB'.format(np.mean(avg_snr)))
+            print('     Line to upgrade: {}'.format(max(avg_congestion, key=avg_congestion.get)))
+            exit()
+
+        print('     Avg Total Traffic: {:.2f} Tbps'.format(np.mean(traffic)))
+        print('     Avg Lightpath Bitrate: {:.2f} Gbps'.format(np.mean(avg_rbl)))
+        print('     Avg Lightpath SNR: {:.2f} dB'.format(np.mean(avg_snr)))
+        print('     Line to upgrade: {}'.format(max(avg_congestion, key=avg_congestion.get)))
+        print('\n')
+        # s = pd.Series(data=[0.0] * len(nodes), index=nodes)
+        # df = pd.DataFrame(0.0, index=s.index, columns=s.index, dtype=s.dtype)
+        # print(df)
+        # for connection in streamed:
+        #     df.loc[connection.input_node, connection.output_node] = connection.bitrate
+        # print(df)
+        # plot3dbars(rates, i)
+        # plot3dbars(df.values, i)
+
+
+def main2():
+    nmc = 10
+    load_margin = 5e-4
+    montecarlo = MonteCarlo('nodes.json')
+    print("Starting Montecarlo Analysis w/ multiplier = {:d}".format(16))
+    print('\n')
     for i in range(nmc):
-        print("Monte-Carlo {:.1f}% (Realization #{:d})".format((i+1)*100/nmc, i))
-        net = Network('nodes.json', nch=2, upgrade_line="CA")
-        net.connect()
-        # net.plot_topography()
+        print("     Monte-Carlo {:.1f}% (Realization #{:d})".format((i+1)*100/nmc, i))
+        montecarlo.transceiver = "shannon"
+        montecarlo.realize(rate=400, multiplier=16, nch=15, upgrade_line="DB")
 
-        nodes = list(net.nodes.keys())
-        t_matrix = create_traffic_matrix(nodes, 400, 1)
-        rates = t_matrix.values
+    montecarlo.compute_results()
 
-        node_pairs = list(filter(lambda n: n[0] != n[1], it.product(nodes, nodes)))
-        shuffle(node_pairs)
-        mc_node_pairs.append(copy.deepcopy(node_pairs))
-        connections = []
-        for node_pair in node_pairs:
-            conn = Connection(node_pair[0],node_pair[-1], float(t_matrix.loc[node_pair[0], node_pair[-1]]))
-            connections.append(conn)
-
-        streamed = net.stream(connections, best='snr', transceiver='flex-rate')
-        mc_streamed.append(streamed)
-        mc_line_state.append(net.lines)
-
-        # avg result
-        mc_snrs = []
-        mc_rbl = []
-        mc_rbc = []
-
-        for streamed in mc_streamed:
-            snrs = []
-            rbl = []
-            [snrs.extend(connection.snr) for connection in streamed]
-            for cn in streamed:
-                for lp in cn.lightpaths:
-                    rbl.append(lp.bitrate)
-
-            rbc = [cn.calculate_capacity() for cn in streamed]
-            mc_snrs.append(snrs)
-            mc_rbl.append(rbl)
-            mc_rbc.append(rbc)
-
-    avg_snr = []
-    avg_rbl = []
-    traffic = []
-
-    [traffic.append(np.sum(lpt)) for lpt in mc_rbl]
-    [avg_snr.append(np.mean(list(filter(lambda s: s != 0, snr)))) for snr in mc_snrs]
-    [avg_rbl.append(np.mean(list(lpb))) for lpb in mc_rbl]
-
-    lines = list(mc_line_state[0].keys())
-    congestion_set = {name: [] for name in lines}
-    for line_state in mc_line_state:
-        for line_label, line in line_state.items():
-            cong_rate = line.state.count("occupied")/len(line.state)
-            congestion_set[line_label].append(cong_rate)
-
-    avg_congestion = {label: [] for label in lines}
-    for line_label, cong in congestion_set.items():
-        avg_congestion[line_label] = np.mean(cong)
+    avg_snr = montecarlo.avg_snr
+    avg_rbl = montecarlo.avg_rbl
+    traffic = montecarlo.traffic
+    avg_congestion = montecarlo.avg_congestion()
 
     plt.bar(range(len(avg_congestion)), list(avg_congestion.values()), align='center')
     plt.xticks(range(len(avg_congestion)), list(avg_congestion.keys()))
+    plt.title("Multiplier = {:d}".format(16))
     plt.show()
-
-    print('Avg Total Traffic: {:.2f} Tbps'.format(np.mean(traffic)))
-    print('Avg Lightpath Bitrate: {:.2f} Gbps'.format(np.mean(avg_rbl)))
-    print('Avg Lightpath SNR: {:.2f} dB'.format(np.mean(avg_snr)))
-    print('Line to upgrade: {}'.format(max(avg_congestion, key=avg_congestion.get)))
-    s = pd.Series(data=[0.0] * len(nodes), index=nodes)
-    df = pd.DataFrame(0.0, index=s.index, columns=s.index, dtype=s.dtype)
-    print(df)
-    for connection in streamed:
-        df.loc[connection.input_node, connection.output_node] = connection.bitrate
-    print(df)
-    plot3dbars(rates, i)
-    plot3dbars(df.values, i)
+    print('     Avg Total Traffic: {:.2f} Tbps'.format(np.mean(traffic)))
+    print('     Avg Lightpath Bitrate: {:.2f} Gbps'.format(np.mean(avg_rbl)))
+    print('     Avg Lightpath SNR: {:.2f} dB'.format(np.mean(avg_snr)))
+    print('     Line to upgrade: {}'.format(max(avg_congestion, key=avg_congestion.get)))
+    print('\n')
 
 
 if __name__ == '__main__':
-    main()
+    main1()
